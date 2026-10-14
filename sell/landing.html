@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-ledger — money primitives for AI agents</title>
+<meta name="description" content="Decimal money primitives, escalating fee curves, and reference-bound paywalls for AI agents that handle real balances. 44 tests, zero dependencies.">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --ok: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.15rem; margin: 40px 0 12px; color: var(--text); }
+  .sub { color: var(--muted); font-size: 1.05rem; margin: 0 0 28px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
+  .badge {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 12px; font-size: 0.8rem; color: var(--muted);
+  }
+  .cta {
+    display: inline-block; background: var(--accent); color: #04121f;
+    font-weight: 600; text-decoration: none; padding: 13px 26px;
+    border-radius: 8px; font-size: 1rem;
+  }
+  .cta:hover { filter: brightness(1.08); }
+  .price { color: var(--muted); font-size: 0.9rem; margin: 10px 0 0; }
+  pre {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5;
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 8px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td:first-child { white-space: nowrap; color: var(--accent); font-family: ui-monospace, monospace; font-size: 0.82rem; }
+  .note { color: var(--muted); font-size: 0.88rem; border-left: 2px solid var(--border); padding-left: 14px; margin: 24px 0 0; }
+  ul { padding-left: 20px; } li { margin: 5px 0; }
+  .ok { color: var(--ok); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>agent-ledger</h1>
+  <p class="sub">Money primitives, fee curves, and paywalls for AI agents that
+  handle real balances. Extracted from an agent that tracked live funds for a month.</p>
+
+  <div class="badges">
+    <span class="badge">44 tests</span>
+    <span class="badge">zero dependencies</span>
+    <span class="badge">pure stdlib</span>
+    <span class="badge">MIT licensed</span>
+  </div>
+
+  <a class="cta" href="__CHECKOUT_URL__" id="buy">Buy — $49</a>
+  <p class="price">One-time. Instant delivery. No subscription.</p>
+
+  <h2>The problem</h2>
+  <p>Most agent finance code is prompt-shaped: <em>"track your expenses
+  carefully."</em> That fails silently. A rounding bug or a sign error produces
+  plausible-looking numbers that are simply wrong, and nobody notices until a
+  reconciliation fails weeks later.</p>
+  <p>This is the code shape instead.</p>
+
+  <h2>What's inside</h2>
+  <ul>
+    <li><code>money.py</code> — Decimal primitives that make it hard to be quietly wrong</li>
+    <li><code>fee_curve.py</code> — escalating-liability arithmetic, pure functions</li>
+    <li><code>paywall.py</code> — pay-per-call verification that cannot be replayed</li>
+    <li><code>sell/stripe_checkout.py</code> — Checkout Sessions, secret never logged</li>
+  </ul>
+
+  <h2>Why the guards look paranoid</h2>
+  <p>Every guard is regression cover for a defect that actually happened. These
+  four cost real money:</p>
+  <table>
+    <tr><th>Guard</th><th>What it prevented</th></tr>
+    <tr><td>Decimal everywhere</td><td>cent-precision sums drifting in reports</td></tr>
+    <tr><td>sign in one function</td><td>an inverted ledger with plausible totals</td></tr>
+    <tr><td>clamp_zero, not max(0,x)</td><td><code>"0"</code> breaking 2-decimal formatting</td></tr>
+    <tr><td>reference-bound payments</td><td>the product served free, booked as revenue</td></tr>
+  </table>
+
+  <h2>Quick start</h2>
+<pre><code>from agent_ledger import money, fee_curve
+
+money.fmt(0)                      # "0.00"  - never "0"
+money.clamp_zero(Decimal("-5"))   # Decimal("0.00")
+money.refuse_sub_cent("1.089559") # raises MoneyError
+
+fee_curve.daily_fee(3)            # Decimal("15.00")
+fee_curve.lifetime_fees(10)       # Decimal("275.00")
+fee_curve.month_key("2026-01-31T23:30:00Z")  # "2026-02"</code></pre>
+
+  <h2>Pay-per-call endpoint</h2>
+<pre><code>from agent_ledger import Paywall, PaymentError
+
+pw = Paywall(payee="YOUR_ADDRESS", price="0.001", decimals=6)
+
+@app.route("/v1/data")
+def data():
+    proof = request.headers.get("X-PAYMENT")
+    ref   = request.headers.get("X-PAYMENT-REF")
+    if not proof:
+        return pw.issue_challenge(resource="/v1/data"), 402
+    try:
+        pw.verify(proof, resource="/v1/data", reference=ref)
+    except PaymentError as e:
+        return {"error": str(e)}, 403
+    return {"data": "..."}</code></pre>
+
+  <p class="note">The <code>reference</code> is the part people skip. Skipping it
+  is how you give your product away: any past transfer into the address becomes a
+  valid payment proof. <code>tests/test_paywall.py::UnboundPaymentTests</code>
+  reproduces that exploit in miniature.</p>
+
+  <h2>Tests</h2>
+<pre><code>python -m unittest discover -s tests -v
+# Ran 44 tests - OK</code></pre>
+
+  <p class="note"><span class="ok">Payment verified.</span> Every purchase is
+  confirmed against Stripe before delivery — not inferred from a redirect.</p>
+
+</div>
+</body>
+</html>
