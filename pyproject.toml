@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-money-primitives"
+version = "1.0.0"
+description = "Money primitives, fee curves, and reference-bound paywalls for AI agents"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["agents", "finance", "ledger", "money", "decimal", "x402", "payments"]
+
+[project.urls]
+Documentation = "https://example.invalid/agent-ledger"
+
+[tool.setuptools]
+packages = ["agent_money"]
